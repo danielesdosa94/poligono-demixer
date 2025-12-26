@@ -1,0 +1,13 @@
+# Ignorar entorno virtual
+venv/
+__pycache__/
+
+# Ignorar archivos de audio de prueba (para no llenar el repo)
+*.mp3
+*.wav
+*.flac
+separated/
+
+# Ignorar archivos de sistema
+.DS_Store
+Thumbs.db
