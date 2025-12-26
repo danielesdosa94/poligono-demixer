@@ -1,52 +1,49 @@
 import subprocess
 import os
+import sys
+import io # <--- IMPORTANTE: Necesario para arreglar la codificación
 
-# --- CONFIGURACIÓN DE CALIDAD ---
+# --- PARCHE DE CODIFICACIÓN PARA WINDOWS ---
+# Esto obliga a Python a usar UTF-8 para imprimir en la consola,
+# permitiendo emojis y tildes sin que la app explote.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# MODELO: Probemos la versión "Fine Tuned" (htdemucs_ft)
-# Suele tener mejor separación vocal que el estándar.
+# --- CONFIGURACIÓN ---
 MODELO = "htdemucs_ft" 
-
-# SHIFTS: Número de pasadas aleatorias.
-# 1 = Rápido (calidad normal)
-# 2 = Mejor calidad (reduce artifacts)
-# 5 - 10 = Calidad "Audiófila" (muy lento, pero muy limpio)
-# Recomendación para Lead Magnet: 2
 SHIFTS = "2"
-
-# OVERLAP: Cuánto se superponen los segmentos (0.1 a 0.99).
-# 0.25 es default. Subirlo a 0.5 suaviza las uniones.
 OVERLAP = "0.5"
 
 def procesar_audio(ruta_archivo):
     if not os.path.exists(ruta_archivo):
-        print(f"❌ Error: El archivo '{ruta_archivo}' no existe.")
+        # Quitamos emojis de los errores críticos por seguridad
+        print(f"Error: El archivo '{ruta_archivo}' no existe.")
         return False
 
-    print(f"\n--- 🎛️ Procesando en Alta Calidad ---")
-    print(f"Canción: {os.path.basename(ruta_archivo)}")
-    print(f"Modelo: {MODELO} | Shifts: {SHIFTS} | Overlap: {OVERLAP}")
-    print("⏳ Esto tardará más que la prueba anterior...")
-
+    # Ahora sí podemos usar emojis sin miedo
+    print(f"--- 🎛️ Procesando: {os.path.basename(ruta_archivo)} ---")
+    print(f"Modelo: {MODELO} | Shifts: {SHIFTS}")
+    
     comando = [
-        "demucs",
+        sys.executable, "-m", "demucs",
         "-n", MODELO,
         "--shifts", SHIFTS,
         "--overlap", OVERLAP,
-        # Opcional: Si quieres guardar en MP3 320k en vez de WAV para ahorrar espacio
-        # "--mp3", "--mp3-bitrate", "320",
         ruta_archivo
     ]
 
     try:
         subprocess.run(comando, check=True)
-        print(f"\n✅ Separación completada.")
+        print(f"\n✅ Separación completada con éxito.")
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nError critico en Python: {e}")
         return False
 
 if __name__ == "__main__":
-    archivo_input = "test.wav" # Asegúrate que este archivo exista
-    procesar_audio(archivo_input)
+    if len(sys.argv) > 1:
+        archivo_input = sys.argv[1]
+        procesar_audio(archivo_input)
+    else:
+        print("Advertencia: Modo manual. Procesando 'test.mp3'")
+        procesar_audio("test.mp3")

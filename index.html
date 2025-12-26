@@ -3,29 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <title>Polígono Demixer</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
     <style>
         body {
-            font-family: sans-serif;
-            background-color: #1a1a1a; /* Fondo oscuro estilo Studio */
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #000000;
             color: white;
             text-align: center;
             padding: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 80vh;
         }
-        h1 { color: #00d2ff; } /* Un azul neón */
+        h1 { color: #D9052E; margin-bottom: 10px;}
+        p { color: #aaa; margin-bottom: 30px; }
+        
         button {
             padding: 15px 30px;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
-            background: #00d2ff;
+            background: linear-gradient(45deg, #00d2ff, #0078ff);
+            color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 30px;
             font-weight: bold;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+        }
+        button:hover { transform: scale(1.05); }
+        button:disabled { background: #555; cursor: not-allowed; }
+
+        #status {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #00d2ff;
+            min-height: 20px;
         }
     </style>
 </head>
 <body>
     <h1>🎛️ Polígono Demixer</h1>
-    <p>Arrastra tu canción aquí o selecciona un archivo</p>
-    <button>Seleccionar Archivo</button>
+    <p>IA de Separación de Stems de Alta Fidelidad</p>
+    
+    <button id="btn-select">Seleccionar Canción</button>
+    
+    <div id="status">Esperando archivo...</div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const btn = document.getElementById('btn-select');
+        const status = document.getElementById('status');
+
+        btn.addEventListener('click', () => {
+            // 1. Enviar señal al proceso principal
+            ipcRenderer.send('abrir-selector-archivo');
+        });
+
+        // 2. Escuchar respuestas del proceso principal
+        ipcRenderer.on('mensaje-consola', (event, texto) => {
+            status.innerText = texto;
+        });
+
+        ipcRenderer.on('proceso-terminado', (event) => {
+            status.innerText = "✅ ¡Listo! Revisa la carpeta 'separated'.";
+            btn.disabled = false;
+            btn.innerText = "Seleccionar otra canción";
+        });
+
+        ipcRenderer.on('error', (event, err) => {
+            status.innerText = "❌ Error: " + err;
+            btn.disabled = false;
+        });
+        
+        // Cuando empieza, desactivamos el botón para que no den doble click
+        ipcRenderer.on('inicio-proceso', () => {
+            btn.disabled = true;
+            btn.innerText = "Procesando...";
+        });
+    </script>
 </body>
 </html>

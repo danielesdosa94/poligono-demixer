@@ -20,5 +20,8 @@
   "homepage": "https://github.com/danielesdosa94/poligono-demixer#readme",
   "devDependencies": {
     "electron": "^39.2.7"
+  },
+  "dependencies": {
+    "python-shell": "^5.0.0"
   }
 }
