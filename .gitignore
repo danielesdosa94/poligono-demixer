@@ -12,3 +12,9 @@ separated/
 .DS_Store
 Thumbs.db
 node_modules/
+
+dist
+build
+release
+*.spec
+poligono_debug.txt

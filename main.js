@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
-const { PythonShell } = require('python-shell');
+const { spawn } = require('child_process'); // Usamos spawn nativo, más robusto para .exe
 
 let ventana;
 
@@ -28,50 +28,65 @@ function iniciarProcesamiento(rutaArchivo, event) {
     event.reply('inicio-proceso');
     event.reply('mensaje-consola', `Cargando motor de IA...`);
 
-    let opciones = {
-        mode: 'text',
-        pythonPath: path.join(__dirname, 'venv', 'Scripts', 'python.exe'),
-        scriptPath: __dirname,
-        args: [rutaArchivo, carpetaBase] 
-    };
+    // --- DETECCIÓN INTELIGENTE DE ENTORNO ---
+    let comando, argumentos;
 
-    let pyshell = new PythonShell('motor.py', opciones);
+    if (app.isPackaged) {
+        // MODO PRODUCCIÓN (Cuando ya es un .exe instalado)
+        // La carpeta 'motor' estará dentro de resources
+        const motorPath = path.join(process.resourcesPath, 'motor', 'motor.exe');
+        comando = motorPath;
+        argumentos = [rutaArchivo, carpetaBase]; // motor.exe recibe argumentos directo
+        console.log("Modo Producción: Usando", motorPath);
+    } else {
+        // MODO DESARROLLO (En tu VS Code)
+        const pythonPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+        const scriptPath = path.join(__dirname, 'motor.py');
+        comando = pythonPath;
+        argumentos = ['-u', scriptPath, rutaArchivo, carpetaBase];
+        console.log("Modo Desarrollo: Usando VENV");
+    }
+    // -----------------------------------------
 
-    // --- VARIABLES PARA CALCULAR EL PROGRESO GLOBAL ---
-    const TOTAL_PASES = 8; // 4 Stems * 2 Shifts
-    let paseActual = 0;    // Empezamos en el pase 0 (que visualmente será el 1)
+    // Ejecutamos el proceso (Sea Python o sea el Exe)
+    const proceso = spawn(comando, argumentos, {
+        windowsHide: true // Ocultar ventana negra extra en producción
+    });
+
+    // Variables para el progreso
+    const TOTAL_PASES = 8;
+    let paseActual = 0;
     let ultimoPorcentajeRaw = 0;
 
-    pyshell.on('message', function (mensaje) {
+    // LEER LO QUE DICE EL MOTOR
+    proceso.stdout.on('data', (data) => {
+        const mensaje = data.toString();
         console.log("PY:", mensaje);
+
+        // 1. Detectar Ruta Final
         if (mensaje.includes('FINAL_PATH::')) {
              const rutaFinal = mensaje.split('FINAL_PATH::')[1].trim();
              event.reply('proceso-terminado', rutaFinal);
              return;
         }
-        
-        // Detectar Porcentaje (Patrón "Numero%")
+
+        // 2. Detectar Porcentaje
         const textoLimpio = mensaje.replace(/\u001b\[.*?m/g, '').trim();
         const match = textoLimpio.match(/(\d{1,3})%/);
 
         if (match) {
-            let porcentajeRaw = parseInt(match[1]); // Porcentaje del pase actual (0-100)
+            let porcentajeRaw = parseInt(match[1]);
 
-            // DETECTOR DE NUEVA PASADA:
-            // Si la barra cae bruscamente (ej: de 90% a 5%), significa que empezó un nuevo pase
+            // Detector de nuevo pase (si baja de golpe)
             if (porcentajeRaw < ultimoPorcentajeRaw && ultimoPorcentajeRaw > 80 && porcentajeRaw < 20) {
                 paseActual++;
             }
-            // Límite de seguridad
             if (paseActual >= TOTAL_PASES) paseActual = TOTAL_PASES - 1;
-
             ultimoPorcentajeRaw = porcentajeRaw;
 
-            // --- CÁLCULO DEL PROGRESO GLOBAL (LA MAGIA) ---
-            // Fórmula: (PasesCompletados * 100 + %Actual) / TotalPases
+            // Cálculo Global
             let porcentajeGlobal = ((paseActual * 100) + porcentajeRaw) / TOTAL_PASES;
             
-            // Enviamos un OBJETO con toda la info detallada a la pantalla
             event.reply('actualizar-progreso', {
                 global: Math.round(porcentajeGlobal),
                 pase: paseActual + 1,
@@ -80,13 +95,25 @@ function iniciarProcesamiento(rutaArchivo, event) {
         }
     });
 
-    pyshell.on('error', function (err) {
-        console.error("Crash:", err);
-        event.reply('error', 'Ocurrió un error inesperado.');
+    // LEER ERRORES
+    proceso.stderr.on('data', (data) => {
+        const errorMsg = data.toString();
+        // A veces Demucs manda info por stderr que no es error, filtramos:
+        if (errorMsg.toLowerCase().includes('error') && !errorMsg.includes('%')) {
+            console.error("ERR:", errorMsg);
+        }
     });
 
-    pyshell.end(function (err) {
-        if (err) console.error("Fin proceso con error:", err);
+    proceso.on('close', (code) => {
+        console.log(`Proceso terminó con código ${code}`);
+        if (code !== 0) {
+            event.reply('error', 'El proceso de IA se cerró inesperadamente.');
+        }
+    });
+    
+    proceso.on('error', (err) => {
+        console.error("Error al iniciar proceso:", err);
+        event.reply('error', 'No se pudo iniciar el motor de IA.');
     });
 }
 

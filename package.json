@@ -1,27 +1,60 @@
 {
   "name": "poligono-demixer",
   "version": "1.0.0",
-  "description": "",
+  "description": "Herramienta IA de Separación de Stems",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/danielesdosa94/poligono-demixer.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Poligono Studio",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/danielesdosa94/poligono-demixer/issues"
   },
   "homepage": "https://github.com/danielesdosa94/poligono-demixer#readme",
   "devDependencies": {
-    "electron": "^39.2.7"
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "python-shell": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.poligonostudio.splitter",
+    "productName": "Poligono Splitter",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "logo2.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Polígono Splitter"
+    },
+    "files": [
+      "**/*",
+      "!venv",
+      "!separated",
+      "!motor.py",
+      "!dist",
+      "!.git",
+      "!.gitignore"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/motor",
+        "to": "motor"
+      }
+    ]
   }
 }
