@@ -2,86 +2,194 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Polígono Demixer</title>
+    <title>Polígono Splitter</title>
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
-            background-color: #000000;
-            color: white;
-            text-align: center;
-            padding: 50px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 80vh;
+            background-color: #141414;
+            color: #FFFFFF;
+            margin: 0; padding: 0;
+            height: 100vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            overflow: hidden; user-select: none; position: relative;
         }
-        h1 { color: #D9052E; margin-bottom: 10px;}
-        p { color: #aaa; margin-bottom: 30px; }
-        
+
+        #main-content {
+            z-index: 1; display: flex; flex-direction: column; align-items: center; width: 100%;
+            transition: filter 0.3s;
+        }
+
+        #logo { width: 150px; margin-bottom: 20px; pointer-events: none; }
+        h1 { font-weight: 700; letter-spacing: 2px; margin: 0 0 5px 0; text-transform: uppercase; }
+        p { color: #9E9E9E; font-size: 14px; margin-bottom: 40px; }
+
         button {
-            padding: 15px 30px;
-            font-size: 16px;
-            cursor: pointer;
-            background: linear-gradient(45deg, #00d2ff, #0078ff);
-            color: white;
-            border: none;
-            border-radius: 30px;
-            font-weight: bold;
-            transition: transform 0.2s;
-            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            padding: 15px 40px; font-size: 16px; cursor: pointer; border-radius: 4px;
+            font-weight: bold; transition: all 0.3s ease; border: none;
         }
-        button:hover { transform: scale(1.05); }
-        button:disabled { background: #555; cursor: not-allowed; }
+
+        #btn-select { background-color: #D9052E; color: white; box-shadow: 0 4px 15px rgba(217, 5, 46, 0.4); }
+        #btn-select:hover { transform: translateY(-2px); background-color: #ff1c45; }
+        #btn-select:disabled { background: #333; color: #555; box-shadow: none; cursor: not-allowed; transform: none; }
+
+        #btn-open {
+            margin-top: 20px; background: transparent; border: 2px solid #9E9E9E; color: #9E9E9E;
+        }
+        #btn-open:hover { background: #9E9E9E; color: #141414; }
+
+        /* BARRA DE PROGRESO */
+        #progress-container {
+            width: 300px; height: 6px; background-color: #333;
+            border-radius: 3px; margin-top: 30px; overflow: hidden; display: none;
+        }
+
+        #progress-bar {
+            width: 0%; height: 100%; background-color: #D9052E;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px #D9052E;
+        }
+
+        /* ANIMACIÓN DE CARGA INDETERMINADA (El efecto "Loading") */
+        @keyframes loading-scan {
+            0% { left: -50%; width: 30%; }
+            50% { left: 25%; width: 50%; }
+            100% { left: 100%; width: 30%; }
+        }
+
+        #progress-bar.indeterminate {
+            position: relative;
+            width: 100% !important; /* Llenamos el contenedor */
+            background-color: #333; /* Fondo oscuro */
+        }
+        
+        #progress-bar.indeterminate::after {
+            content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+            background-color: #D9052E;
+            animation: loading-scan 1.5s infinite linear;
+        }
 
         #status {
-            margin-top: 30px;
-            font-size: 14px;
-            color: #00d2ff;
-            min-height: 20px;
+            margin-top: 15px; font-size: 12px; color: #9E9E9E;
+            font-family: 'Consolas', monospace; min-height: 20px;
         }
+
+        #drop-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(20, 20, 20, 0.95);
+            border: 8px dashed #D9052E; box-sizing: border-box;
+            z-index: 9999; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        #drop-message { font-size: 40px; font-weight: bold; color: #D9052E; text-transform: uppercase; pointer-events: none; }
     </style>
 </head>
 <body>
-    <h1>🎛️ Polígono Demixer</h1>
-    <p>IA de Separación de Stems de Alta Fidelidad</p>
-    
-    <button id="btn-select">Seleccionar Canción</button>
-    
-    <div id="status">Esperando archivo...</div>
+    <div id="main-content">
+        <img id="logo" src="logo.png" alt="Polígono Studio" draggable="false">
+        
+        <h1>Polígono Splitter</h1>
+        
+        <p>Herramienta de Separación de Audio con IA</p>
+        
+        <button id="btn-select">SELECCIONAR O ARRASTRAR CANCIÓN</button>
+        
+        <div id="progress-container"><div id="progress-bar"></div></div>
+        <div id="status">Esperando archivo...</div>
+        <button id="btn-open" style="display:none;">📂 ABRIR RESULTADOS</button>
+    </div>
+    <div id="drop-overlay"><div id="drop-message">🔥 DROP IT LIKE IT'S CALIENTE</div></div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const { ipcRenderer, webUtils } = require('electron');
 
-        const btn = document.getElementById('btn-select');
+        const mainContent = document.getElementById('main-content');
+        const dropOverlay = document.getElementById('drop-overlay');
+        const btnSelect = document.getElementById('btn-select');
+        const btnOpen = document.getElementById('btn-open');
         const status = document.getElementById('status');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        
+        let rutaResultado = "";
 
-        btn.addEventListener('click', () => {
-            // 1. Enviar señal al proceso principal
-            ipcRenderer.send('abrir-selector-archivo');
+        // --- DRAG & DROP ---
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+            window.addEventListener(e, preventDefaults, false);
+            dropOverlay.addEventListener(e, preventDefaults, false);
         });
 
-        // 2. Escuchar respuestas del proceso principal
-        ipcRenderer.on('mensaje-consola', (event, texto) => {
-            status.innerText = texto;
+        window.addEventListener('dragenter', (e) => {
+            dropOverlay.style.display = 'flex'; mainContent.style.filter = 'blur(5px)';
+        });
+        dropOverlay.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null) { dropOverlay.style.display = 'none'; mainContent.style.filter = 'none'; }
+        });
+        dropOverlay.addEventListener('drop', (e) => {
+            dropOverlay.style.display = 'none'; mainContent.style.filter = 'none';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const filePath = webUtils ? webUtils.getPathForFile(files[0]) : files[0].path;
+                ipcRenderer.send('archivo-arrastrado', filePath);
+            }
         });
 
-        ipcRenderer.on('proceso-terminado', (event) => {
-            status.innerText = "✅ ¡Listo! Revisa la carpeta 'separated'.";
-            btn.disabled = false;
-            btn.innerText = "Seleccionar otra canción";
+        // --- BOTONES ---
+        btnSelect.addEventListener('click', () => ipcRenderer.send('abrir-selector-archivo'));
+        btnOpen.addEventListener('click', () => ipcRenderer.send('abrir-carpeta-salida', rutaResultado));
+
+        // --- FEEDBACK VISUAL ---
+        ipcRenderer.on('inicio-proceso', () => {
+            btnSelect.disabled = true;
+            btnSelect.innerText = "CARGANDO MOTOR...";
+            btnSelect.style.backgroundColor = "#333";
+            btnOpen.style.display = 'none';
+            
+            progressContainer.style.display = 'block';
+            progressBar.className = 'indeterminate';
+            status.style.color = "#9E9E9E";
+        });
+
+        // --- AQUI ESTA EL CAMBIO IMPORTANTE ---
+        ipcRenderer.on('actualizar-progreso', (event, datos) => {
+            // Quitamos animación de carga indeterminada
+            if (progressBar.classList.contains('indeterminate')) {
+                progressBar.className = '';
+                btnSelect.innerText = "SEPARANDO STEMS...";
+            }
+
+            // Ahora 'datos' es un objeto: { global: 12, pase: 1, totalPases: 8 }
+            progressBar.style.width = datos.global + "%";
+            
+            // Actualizamos el texto con detalle profesional
+            status.innerText = `Procesando... ${datos.global}% (Pase ${datos.pase}/${datos.totalPases})`; 
+        });
+
+        ipcRenderer.on('mensaje-consola', (event, texto) => status.innerText = texto);
+
+        ipcRenderer.on('proceso-terminado', (event, ruta) => {
+            status.innerText = "✅ ¡Listo! Stems guardados correctamente.";
+            status.style.color = "#FFFFFF";
+            progressBar.style.width = "100%";
+            rutaResultado = ruta;
+            
+            setTimeout(() => {
+                btnSelect.disabled = false;
+                btnSelect.innerText = "SELECCIONAR OTRA";
+                btnSelect.style.backgroundColor = "#D9052E";
+                btnOpen.style.display = 'inline-block';
+            }, 500);
         });
 
         ipcRenderer.on('error', (event, err) => {
             status.innerText = "❌ Error: " + err;
-            btn.disabled = false;
-        });
-        
-        // Cuando empieza, desactivamos el botón para que no den doble click
-        ipcRenderer.on('inicio-proceso', () => {
-            btn.disabled = true;
-            btn.innerText = "Procesando...";
+            status.style.color = "#D9052E";
+            btnSelect.disabled = false;
+            btnSelect.innerText = "REINTENTAR";
+            progressBar.className = '';
+            progressBar.style.width = "0%";
         });
     </script>
 </body>
